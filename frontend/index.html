@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IYYAANS CAFE - POS</title>
+
+  <!-- ADMIN LOGIN PROTECTION -->
+  <script>
+    if (!localStorage.getItem("adminToken")) {
+      window.location.replace("login.html");
+    }
+  </script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="brand">
+      <div class="brand-logo">I</div>
+      <div>
+        <h2>IYYAANS</h2>
+        <span>CAFE POS SYSTEM</span>
+      </div>
+    </div>
+
+    <p class="nav-label">MAIN MENU</p>
+
+    <nav>
+      <button class="nav-item active" data-page="orders">
+        🍽️ <span>Orders</span>
+      </button>
+
+      <button class="nav-item" data-page="billing">
+        🧾 <span>Billing</span>
+      </button>
+
+      <button class="nav-item" data-page="reports">
+        📊 <span>Reports</span>
+      </button>
+
+      <button class="nav-item" data-page="settings">
+        ⚙️ <span>Settings</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="profile-icon">I</div>
+      <div>
+        <strong>IYYAANS CAFE</strong>
+        <small>Administrator</small>
+      </div>
+    </div>
+
+  </aside>
+
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <header class="topbar">
+
+      <div class="top-heading">
+        <button class="menu-toggle" id="menuToggle">☰</button>
+        <div>
+          <h2 id="pageTitle">Orders</h2>
+          <p id="dateText">Welcome to IYYAANS CAFE</p>
+        </div>
+      </div>
+
+      <div class="top-status">
+        <span class="online-dot"></span>
+        <span>POS System</span>
+
+        <!-- ADMIN LOGOUT -->
+        <button type="button" id="logoutBtn" class="logout-btn">
+          Logout
+        </button>
+      </div>
+
+    </header>
+
+
+    <div class="page-content">
+
+      <!-- ORDERS PAGE -->
+      <section class="page active" id="ordersPage">
+
+        <div class="section-heading">
+
+          <div>
+            <h1>New Order</h1>
+            <p>Select menu items and create your order</p>
+          </div>
+
+          <div class="order-actions">
+
+            <button class="add-button" id="addItemBtn">
+              + Add Item
+            </button>
+
+            <button class="cart-toggle-btn" id="cartToggle">
+              🛒 Cart <span id="cartBadge">0</span>
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <!-- MENU SEARCH AND CATEGORIES -->
+        <div class="menu-toolbar">
+
+          <input
+            type="search"
+            id="searchItems"
+            placeholder="Search food items..."
+          >
+
+          <div class="category-list" id="categories">
+            <button class="category-btn active" data-category="All">All</button>
+          </div>
+
+        </div>
+
+
+        <!-- MENU AND CART -->
+        <div class="order-layout">
+
+          <div class="menu-section">
+
+            <div class="section-subheading">
+              <h3>Menu Items</h3>
+              <span id="menuCount">0 Items</span>
+            </div>
+
+            <div class="menu-grid" id="menuGrid">
+              <div class="no-items">
+                Menu items will appear here
+              </div>
+            </div>
+
+          </div>
+
+
+          <!-- CART PANEL -->
+          <div class="cart-panel" id="cartPanel">
+
+            <div class="cart-heading">
+
+              <div>
+                <h3>🛒 Order Cart</h3>
+                <p><span id="cartCount">0</span> items selected</p>
+              </div>
+
+              <button class="close-btn" id="closeCart">✕</button>
+
+              <button class="clear-btn" id="clearCart">
+                Clear
+              </button>
+
+            </div>
+
+
+            <div class="cart-items" id="cartItems">
+              <div class="empty-cart">
+                <div class="empty-cart-icon">🛒</div>
+                <h4>Your cart is empty</h4>
+                <p>Select items from the menu</p>
+              </div>
+            </div>
+
+
+            <!-- TOTAL -->
+            <div class="cart-summary">
+
+              <div class="summary-line">
+                <span>Subtotal</span>
+                <strong id="subtotal">₹0.00</strong>
+              </div>
+
+              <div class="summary-line">
+                <span>Tax</span>
+                <strong id="tax">₹0.00</strong>
+              </div>
+
+              <div class="discount-field">
+                <label for="discountAmount">Discount Amount (₹)</label>
+                <input
+                  type="number"
+                  id="discountAmount"
+                  placeholder="Enter discount amount"
+                  min="0"
+                  step="0.01"
+                  value="0"
+                >
+              </div>
+
+              <div class="summary-line">
+                <span>Discount</span>
+                <strong id="discountValue">₹0.00</strong>
+              </div>
+
+              <div class="summary-total">
+                <span>Total</span>
+                <strong id="total">₹0.00</strong>
+              </div>
+
+              <button class="save-button" id="saveOrder">
+                Save Order
+              </button>
+
+              <button class="print-button" id="savePrint">
+                Save & Print Order
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- BILLING PAGE -->
+      <section class="page" id="billingPage">
+
+        <div class="section-heading">
+          <div>
+            <h1>Billing</h1>
+            <p>Manage your bills and payments</p>
+          </div>
+        </div>
+
+        <div class="billing-stats">
+
+          <div class="mini-stat">
+            <span>Total Bills</span>
+            <strong id="billCount">0</strong>
+          </div>
+
+          <div class="mini-stat">
+            <span>Unsettled Bills</span>
+            <strong id="unsettledCount">0</strong>
+          </div>
+
+          <div class="mini-stat">
+            <span>Settled Bills</span>
+            <strong id="settledCount">0</strong>
+          </div>
+
+        </div>
+
+        <div class="content-box">
+
+          <div class="box-heading">
+            <h3>All Bills</h3>
+
+            <input
+              type="search"
+              id="searchBills"
+              placeholder="Search bill number..."
+            >
+          </div>
+
+          <div id="billList">
+            <div class="empty-message">
+              No bills available
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- REPORTS PAGE -->
+      <section class="page" id="reportsPage">
+
+        <div class="section-heading">
+          <div>
+            <h1>Reports</h1>
+            <p>Sales and payment overview</p>
+          </div>
+
+          <button class="add-button" id="refreshReports">
+            ↻ Refresh
+          </button>
+        </div>
+
+        <div class="report-grid">
+
+          <div class="report-card">
+            <span>Today's Sales</span>
+            <strong id="reportSales">₹0</strong>
+          </div>
+
+          <div class="report-card">
+            <span>Total Orders</span>
+            <strong id="reportOrders">0</strong>
+          </div>
+
+          <div class="report-card">
+            <span>Settled Bills</span>
+            <strong id="reportSettled">0</strong>
+          </div>
+
+          <div class="report-card">
+            <span>Pending Bills</span>
+            <strong id="reportPending">0</strong>
+          </div>
+
+        </div>
+
+        <div class="content-box">
+          <h3>Payment Summary</h3>
+
+          <div class="payment-summary" id="paymentSummary">
+            <div class="payment-line">
+              <span>Cash</span>
+              <strong>₹0</strong>
+            </div>
+
+            <div class="payment-line">
+              <span>GPay / UPI</span>
+              <strong>₹0</strong>
+            </div>
+
+            <div class="payment-line">
+              <span>Split Payment</span>
+              <strong>₹0</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-box">
+          <h3>Recent Transactions</h3>
+
+          <div id="reportTransactions">
+            <div class="empty-message">
+              No transactions available
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- SETTINGS PAGE -->
+      <section class="page" id="settingsPage">
+
+        <div class="section-heading">
+          <div>
+            <h1>Settings</h1>
+            <p>Manage cafe and printer settings</p>
+          </div>
+        </div>
+
+        <div class="content-box settings-box">
+
+          <h3>Business Details</h3>
+
+          <label for="cafeName">Cafe Name</label>
+          <input
+            type="text"
+            id="cafeName"
+            value="IYYAANS CAFE"
+          >
+
+          <label for="receiptFooter">Receipt Footer</label>
+          <input
+            type="text"
+            id="receiptFooter"
+            placeholder="Thank you! Visit Again"
+          >
+
+          <button class="save-button" id="saveSettings">
+            Save Settings
+          </button>
+
+        </div>
+
+        <div class="content-box settings-box">
+
+          <h3>🖨️ Printer Setup</h3>
+
+          <label for="printerType">Printer Connection</label>
+
+          <select id="printerType">
+            <option value="System">System Print</option>
+            <option value="USB">USB Printer</option>
+            <option value="WiFi">Wi-Fi Printer</option>
+          </select>
+
+          <label for="paperSize">Paper Size</label>
+
+          <select id="paperSize">
+            <option value="80mm">80mm</option>
+            <option value="58mm">58mm</option>
+          </select>
+
+          <button class="save-button" id="savePrinter">
+            Save Printer Settings
+          </button>
+
+          <p class="helper-text">
+            USB and Wi-Fi printer connection may require
+            compatible device support or drivers.
+          </p>
+
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+</div>
+
+
+<!-- ADD ITEM MODAL -->
+<div class="modal-overlay" id="itemModal">
+
+  <div class="modal">
+
+    <div class="modal-heading">
+      <h3>Add New Menu Item</h3>
+      <button class="close-btn" type="button" data-close="itemModal">✕</button>
+    </div>
+
+    <form id="itemForm">
+
+      <label for="newItemName">Item Name</label>
+      <input
+        type="text"
+        id="newItemName"
+        placeholder="Enter item name"
+        required
+      >
+
+      <label for="newItemPrice">Price (₹)</label>
+      <input
+        type="number"
+        id="newItemPrice"
+        placeholder="Enter price"
+        min="0"
+        step="0.01"
+        required
+      >
+
+      <label for="newItemCategory">Category</label>
+      <input
+        type="text"
+        id="newItemCategory"
+        placeholder="Example: Snacks, Drinks"
+        required
+      >
+
+      <button class="save-button" type="submit">
+        Save Item
+      </button>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<!-- PAYMENT MODAL -->
+<div class="modal-overlay" id="paymentModal">
+
+  <div class="modal">
+
+    <div class="modal-heading">
+      <h3>Settle Bill</h3>
+      <button class="close-btn" type="button" data-close="paymentModal">✕</button>
+    </div>
+
+    <div id="paymentBillInfo"></div>
+
+    <label for="paymentMethod">Payment Method</label>
+
+    <select id="paymentMethod">
+      <option value="Cash">Cash</option>
+      <option value="GPay">GPay / UPI</option>
+      <option value="Split">Split Payment</option>
+    </select>
+
+    <div id="splitFields" class="hidden">
+
+      <label for="splitCash">Cash Amount</label>
+      <input
+        type="number"
+        id="splitCash"
+        placeholder="Enter cash amount"
+        min="0"
+      >
+
+      <label for="splitGpay">GPay Amount</label>
+      <input
+        type="number"
+        id="splitGpay"
+        placeholder="Enter GPay amount"
+        min="0"
+      >
+
+    </div>
+
+    <button class="save-button" id="confirmPayment">
+      Confirm Payment
+    </button>
+
+  </div>
+
+</div>
+
+
+<!-- RECEIPT MODAL -->
+<div class="modal-overlay" id="receiptModal">
+
+  <div class="modal receipt-modal">
+
+    <div class="modal-heading">
+      <h3>Receipt Preview</h3>
+      <button class="close-btn" type="button" data-close="receiptModal">✕</button>
+    </div>
+
+    <div id="receiptContent" class="receipt-paper">
+
+      <div class="receipt-center">
+        <h2>IYYAANS CAFE</h2>
+        <p>Thank you! Visit Again</p>
+      </div>
+
+      <div class="receipt-line"></div>
+
+      <div id="receiptDetails"></div>
+
+    </div>
+
+    <button class="print-button" id="printReceipt">
+      🖨️ Print Receipt
+    </button>
+
+  </div>
+
+</div>
+
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+
+<script src="app.js"></script>
+
+</body>
+</html>

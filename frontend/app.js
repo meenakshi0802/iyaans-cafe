@@ -2,7 +2,7 @@
    1. STORAGE
 ========================================== */
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://iyaans-cafe-backend.onrender.com/api";
 async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("adminToken");
 

@@ -4,20 +4,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <meta name="theme-color" content="#174B35">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <title>IYYAANS CAFE - POS</title>
 
+  <!-- PWA CONFIGURATION -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./assets/icon-192.png">
+
+  <!-- ADMIN LOGIN PROTECTION -->
   <script>
     if (!localStorage.getItem("adminToken")) {
       window.location.replace("login.html");
     }
   </script>
 
+  <!-- CSS -->
   <link rel="stylesheet" href="style.css">
 
+  <!-- GOOGLE FONTS -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -67,7 +75,6 @@
 
   </aside>
 
-
   <!-- MAIN CONTENT -->
   <main class="main">
 
@@ -92,7 +99,6 @@
       </div>
 
     </header>
-
 
     <div class="page-content">
 
@@ -120,7 +126,6 @@
 
         </div>
 
-
         <!-- MENU SEARCH -->
         <div class="menu-toolbar">
 
@@ -137,7 +142,6 @@
           </div>
 
         </div>
-
 
         <!-- MENU AND CART -->
         <div class="order-layout">
@@ -157,7 +161,6 @@
 
           </div>
 
-
           <!-- CART -->
           <div class="cart-panel" id="cartPanel">
 
@@ -176,7 +179,6 @@
 
             </div>
 
-
             <div class="cart-items" id="cartItems">
               <div class="empty-cart">
                 <div class="empty-cart-icon">🛒</div>
@@ -184,7 +186,6 @@
                 <p>Select items from the menu</p>
               </div>
             </div>
-
 
             <!-- CART SUMMARY -->
             <div class="cart-summary">
@@ -238,7 +239,6 @@
 
       </section>
 
-
       <!-- BILLING PAGE -->
       <section class="page" id="billingPage">
 
@@ -290,7 +290,6 @@
 
       </section>
 
-
       <!-- REPORTS PAGE -->
       <section class="page" id="reportsPage">
 
@@ -306,7 +305,6 @@
           </button>
 
         </div>
-
 
         <!-- REPORT DATE FILTER -->
         <div class="content-box report-filter-box">
@@ -363,7 +361,6 @@
 
         </div>
 
-
         <!-- REPORT STATS -->
         <div class="report-grid">
 
@@ -388,7 +385,6 @@
           </div>
 
         </div>
-
 
         <!-- PAYMENT SUMMARY -->
         <div class="content-box">
@@ -416,7 +412,6 @@
 
         </div>
 
-
         <!-- TRANSACTIONS -->
         <div class="content-box">
 
@@ -432,7 +427,6 @@
 
       </section>
 
-
       <!-- SETTINGS PAGE -->
       <section class="page" id="settingsPage">
 
@@ -442,7 +436,6 @@
             <p>Manage cafe and printer settings</p>
           </div>
         </div>
-
 
         <!-- BUSINESS SETTINGS -->
         <div class="content-box settings-box">
@@ -470,7 +463,6 @@
           </button>
 
         </div>
-
 
         <!-- PRINTER SETTINGS -->
         <div class="content-box settings-box">
@@ -510,7 +502,6 @@
   </main>
 
 </div>
-
 
 <!-- ADD ITEM MODAL -->
 <div class="modal-overlay" id="itemModal">
@@ -562,7 +553,6 @@
   </div>
 
 </div>
-
 
 <!-- PAYMENT MODAL -->
 <div class="modal-overlay" id="paymentModal">
@@ -616,7 +606,6 @@
 
 </div>
 
-
 <!-- RECEIPT MODAL -->
 <div class="modal-overlay" id="receiptModal">
 
@@ -648,13 +637,29 @@
 
 </div>
 
-
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-
 <!-- APP JAVASCRIPT -->
 <script src="app.js"></script>
+
+<!-- PWA SERVICE WORKER REGISTRATION -->
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js")
+        .then(registration => {
+          console.log(
+            "PWA Service Worker Registered:",
+            registration.scope
+          );
+        })
+        .catch(error => {
+          console.error("PWA Registration Failed:", error);
+        });
+    });
+  }
+</script>
 
 </body>
 </html>

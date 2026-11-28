@@ -16,16 +16,34 @@ let activeCategory = "All";
 let selectedPaymentBill = null;
 let currentReceiptOrder = null;
 let isSavingOrder = false;
+let isConfirmingPayment = false;
+let toastTimer = null;
+let deferredInstallPrompt = null;
 
-let settings = JSON.parse(
-  localStorage.getItem("iyyaans_settings") ||
-  JSON.stringify({
-    cafeName: "IYYAANS CAFE",
-    receiptFooter: "Thank you! Visit Again",
-    printerType: "System",
-    paperSize: "80mm"
-  })
-);
+let settings = {
+  cafeName: "IYYAANS CAFE",
+  receiptFooter: "Thank you! Visit Again",
+  printerType: "System",
+  paperSize: "80mm"
+};
+
+try {
+  const savedSettings = JSON.parse(
+    localStorage.getItem("iyyaans_settings") || "{}"
+  );
+
+  settings = { ...settings, ...savedSettings };
+} catch (error) {
+  console.error("Settings Error:", error);
+}
+
+function localDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 let reportRange = {
   type: "today",
@@ -33,8 +51,6 @@ let reportRange = {
   to: localDateString(new Date()),
   label: "Showing today's report"
 };
-
-let deferredInstallPrompt = null;
 
 
 /* ==========================================
@@ -62,31 +78,25 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
 
-  setTimeout(() => {
+  clearTimeout(toastTimer);
+
+  toastTimer = setTimeout(() => {
     toast.classList.remove("show");
   }, 2500);
 }
 
 function openModal(id) {
   const modal = $(id);
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.add("show");
 }
 
 function closeModal(id) {
   const modal = $(id);
-  if (modal) modal.classList.remove("active");
+  if (modal) modal.classList.remove("show");
 }
 
 function getDateTime() {
   return new Date().toISOString();
-}
-
-function localDateString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
 
 function orderLocalDate(order) {
@@ -94,7 +104,53 @@ function orderLocalDate(order) {
 
   if (!value) return "";
 
-  return localDateString(new Date(value));
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  return localDateString(date);
+}
+
+function getOrderId(order) {
+  return order?._id || order?.id || "";
+}
+
+function isOrderSettled(order) {
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  const status = String(order.status || "").toLowerCase();
+
+  return (
+    paymentStatus === "paid" ||
+    paymentStatus === "settled" ||
+    status === "paid" ||
+    status === "settled"
+  );
+}
+
+function normalizeList(data, key) {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.[key])) return data[key];
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.orders)) return data.orders;
+
+  if (data?.data && typeof data.data === "object") {
+    if (Array.isArray(data.data[key])) return data.data[key];
+    if (Array.isArray(data.data.items)) return data.data.items;
+    if (Array.isArray(data.data.orders)) return data.data.orders;
+  }
+
+  return [];
+}
+
+function getSavedOrder(data) {
+  return (
+    data?.order ||
+    data?.data?.order ||
+    data?.data ||
+    data
+  );
 }
 
 
@@ -114,10 +170,16 @@ async function apiFetch(endpoint, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    throw new Error("Unable to connect to server. Check your internet.");
+  }
 
   if (response.status === 401 || response.status === 403) {
     localStorage.removeItem("adminToken");
@@ -133,21 +195,17 @@ async function readApiResponse(response) {
 
   if (!response.ok) {
     throw new Error(
-      data.message || data.error || `Server error: ${response.status}`
+      data.message ||
+      data.error ||
+      `Server error: ${response.status}`
     );
   }
 
+  if (data.success === false) {
+    throw new Error(data.message || "Request failed");
+  }
+
   return data;
-}
-
-function normalizeList(data, key) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data[key])) return data[key];
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.orders)) return data.orders;
-
-  return [];
 }
 
 
@@ -156,9 +214,7 @@ function normalizeList(data, key) {
 ========================================== */
 
 document.querySelectorAll(".nav-item").forEach(button => {
-
   button.addEventListener("click", () => {
-
     const page = button.dataset.page;
 
     document.querySelectorAll(".nav-item").forEach(item => {
@@ -193,7 +249,6 @@ document.querySelectorAll(".nav-item").forEach(button => {
     if (page === "billing") renderBills();
     if (page === "reports") renderReports();
   });
-
 });
 
 
@@ -202,12 +257,10 @@ document.querySelectorAll(".nav-item").forEach(button => {
 ========================================== */
 
 $("logoutBtn")?.addEventListener("click", () => {
-
   if (!confirm("Are you sure you want to logout?")) return;
 
   localStorage.removeItem("adminToken");
   window.location.replace("login.html");
-
 });
 
 
@@ -225,11 +278,11 @@ $("menuToggle")?.addEventListener("click", () => {
 ========================================== */
 
 $("cartToggle")?.addEventListener("click", () => {
-  $("cartPanel")?.classList.add("open");
+  $("cartPanel")?.classList.add("cart-open");
 });
 
 $("closeCart")?.addEventListener("click", () => {
-  $("cartPanel")?.classList.remove("open");
+  $("cartPanel")?.classList.remove("cart-open");
 });
 
 
@@ -238,11 +291,17 @@ $("closeCart")?.addEventListener("click", () => {
 ========================================== */
 
 document.querySelectorAll("[data-close]").forEach(button => {
-
   button.addEventListener("click", () => {
     closeModal(button.dataset.close);
   });
+});
 
+document.querySelectorAll(".modal-overlay").forEach(modal => {
+  modal.addEventListener("click", event => {
+    if (event.target === modal) {
+      modal.classList.remove("show");
+    }
+  });
 });
 
 $("addItemBtn")?.addEventListener("click", () => {
@@ -255,46 +314,43 @@ $("addItemBtn")?.addEventListener("click", () => {
 ========================================== */
 
 $("itemForm")?.addEventListener("submit", async event => {
-
   event.preventDefault();
 
-  const name = $("newItemName").value.trim();
-  const price = Number($("newItemPrice").value);
-  const category = $("newItemCategory").value.trim();
+  const name = $("newItemName")?.value.trim();
+  const price = Number($("newItemPrice")?.value);
+  const category = $("newItemCategory")?.value.trim();
 
   if (!name || !category || !Number.isFinite(price) || price < 0) {
     showToast("Enter valid item details");
     return;
   }
 
-  try {
+  const submitButton = $("itemForm").querySelector(
+    'button[type="submit"]'
+  );
 
+  if (submitButton) submitButton.disabled = true;
+
+  try {
     const response = await apiFetch("/items", {
       method: "POST",
-      body: JSON.stringify({
-        name,
-        price,
-        category
-      })
+      body: JSON.stringify({ name, price, category })
     });
 
     await readApiResponse(response);
 
     $("itemForm").reset();
-
     closeModal("itemModal");
 
     await loadMenuItems();
 
     showToast("Item added successfully");
-
   } catch (error) {
-
     console.error("Add Item Error:", error);
     showToast(error.message || "Failed to add item");
-
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
-
 });
 
 
@@ -303,17 +359,25 @@ $("itemForm")?.addEventListener("submit", async event => {
 ========================================== */
 
 function renderCategories() {
-
   const container = $("categories");
   if (!container) return;
 
   const categories = [
     "All",
-    ...new Set(menuItems.map(item => item.category).filter(Boolean))
+    ...new Set(
+      menuItems
+        .map(item => item.category)
+        .filter(Boolean)
+    )
   ];
+
+  if (!categories.includes(activeCategory)) {
+    activeCategory = "All";
+  }
 
   container.innerHTML = categories.map(category => `
     <button
+      type="button"
       class="category-btn ${activeCategory === category ? "active" : ""}"
       data-category="${escapeHTML(category)}">
       ${escapeHTML(category)}
@@ -321,18 +385,13 @@ function renderCategories() {
   `).join("");
 
   container.querySelectorAll("[data-category]").forEach(button => {
-
     button.addEventListener("click", () => {
-
       activeCategory = button.dataset.category;
 
       renderCategories();
       renderMenu();
-
     });
-
   });
-
 }
 
 
@@ -341,14 +400,12 @@ function renderCategories() {
 ========================================== */
 
 function renderMenu() {
-
   const grid = $("menuGrid");
   if (!grid) return;
 
   const search = $("searchItems")?.value.toLowerCase().trim() || "";
 
   const filtered = menuItems.filter(item => {
-
     const matchesCategory =
       activeCategory === "All" ||
       item.category === activeCategory;
@@ -357,7 +414,6 @@ function renderMenu() {
       String(item.name || "").toLowerCase().includes(search);
 
     return matchesCategory && matchesSearch;
-
   });
 
   if ($("menuCount")) {
@@ -372,38 +428,37 @@ function renderMenu() {
   }
 
   grid.innerHTML = filtered.map(item => {
-
     const id = item._id || item.id;
 
     return `
       <div class="menu-card">
 
-        <div class="menu-card-info">
-          <h3>${escapeHTML(item.name)}</h3>
-          <p>${escapeHTML(item.category || "")}</p>
-          <strong>${money(item.price)}</strong>
-        </div>
+        <div class="food-icon">🍽️</div>
 
-        <button
-          type="button"
-          class="add-cart-btn"
-          data-add-item="${escapeHTML(id)}">
-          + Add
-        </button>
+        <h4>${escapeHTML(item.name)}</h4>
+
+        <small>${escapeHTML(item.category || "")}</small>
+
+        <div class="menu-card-bottom">
+          <span class="menu-price">${money(item.price)}</span>
+
+          <button
+            type="button"
+            class="add-cart-btn"
+            data-add-item="${escapeHTML(id)}">
+            + Add
+          </button>
+        </div>
 
       </div>
     `;
-
   }).join("");
 
   grid.querySelectorAll("[data-add-item]").forEach(button => {
-
     button.addEventListener("click", () => {
       addToCart(button.dataset.addItem);
     });
-
   });
-
 }
 
 
@@ -419,12 +474,14 @@ $("searchItems")?.addEventListener("input", renderMenu);
 ========================================== */
 
 function addToCart(id) {
-
   const item = menuItems.find(
     item => String(item._id || item.id) === String(id)
   );
 
-  if (!item) return;
+  if (!item) {
+    showToast("Item not found");
+    return;
+  }
 
   const existing = cart.find(
     cartItem => String(cartItem.id) === String(id)
@@ -442,9 +499,7 @@ function addToCart(id) {
   }
 
   renderCart();
-
   showToast(`${item.name} added`);
-
 }
 
 
@@ -453,7 +508,6 @@ function addToCart(id) {
 ========================================== */
 
 function changeQuantity(id, change) {
-
   const item = cart.find(
     item => String(item.id) === String(id)
   );
@@ -469,7 +523,6 @@ function changeQuantity(id, change) {
   }
 
   renderCart();
-
 }
 
 
@@ -478,15 +531,12 @@ function changeQuantity(id, change) {
 ========================================== */
 
 $("clearCart")?.addEventListener("click", () => {
-
   if (!cart.length) return;
 
   if (!confirm("Clear all cart items?")) return;
 
   cart = [];
-
   renderCart();
-
 });
 
 
@@ -495,7 +545,6 @@ $("clearCart")?.addEventListener("click", () => {
 ========================================== */
 
 function calculateTotal() {
-
   const subtotal = cart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
@@ -510,13 +559,7 @@ function calculateTotal() {
 
   const total = Math.max(0, subtotal + tax - discount);
 
-  return {
-    subtotal,
-    tax,
-    discount,
-    total
-  };
-
+  return { subtotal, tax, discount, total };
 }
 
 
@@ -525,7 +568,6 @@ function calculateTotal() {
 ========================================== */
 
 function renderCart() {
-
   const container = $("cartItems");
   if (!container) return;
 
@@ -534,16 +576,10 @@ function renderCart() {
     0
   );
 
-  if ($("cartCount")) {
-    $("cartCount").textContent = count;
-  }
-
-  if ($("cartBadge")) {
-    $("cartBadge").textContent = count;
-  }
+  if ($("cartCount")) $("cartCount").textContent = count;
+  if ($("cartBadge")) $("cartBadge").textContent = count;
 
   if (!cart.length) {
-
     container.innerHTML = `
       <div class="empty-cart">
         <div class="empty-cart-icon">🛒</div>
@@ -551,60 +587,68 @@ function renderCart() {
         <p>Select items from the menu</p>
       </div>
     `;
-
   } else {
-
     container.innerHTML = cart.map(item => `
+      <div class="cart-row">
 
-      <div class="cart-item">
-
-        <div class="cart-item-info">
+        <div>
           <h4>${escapeHTML(item.name)}</h4>
-          <p>${money(item.price)} × ${item.quantity}</p>
-          <strong>${money(item.price * item.quantity)}</strong>
+
+          <small>
+            ${money(item.price)} × ${item.quantity}
+          </small>
+
+          <div class="quantity-control">
+
+            <button
+              type="button"
+              data-quantity-id="${escapeHTML(item.id)}"
+              data-change="-1">−</button>
+
+            <strong>${item.quantity}</strong>
+
+            <button
+              type="button"
+              data-quantity-id="${escapeHTML(item.id)}"
+              data-change="1">+</button>
+
+          </div>
         </div>
 
-        <div class="quantity-controls">
-
-          <button
-            type="button"
-            data-quantity-id="${escapeHTML(item.id)}"
-            data-change="-1">−</button>
-
-          <span>${item.quantity}</span>
-
-          <button
-            type="button"
-            data-quantity-id="${escapeHTML(item.id)}"
-            data-change="1">+</button>
-
-        </div>
+        <strong class="cart-price">
+          ${money(item.price * item.quantity)}
+        </strong>
 
       </div>
-
     `).join("");
 
     container.querySelectorAll("[data-quantity-id]").forEach(button => {
-
       button.addEventListener("click", () => {
-
         changeQuantity(
           button.dataset.quantityId,
           Number(button.dataset.change)
         );
-
       });
-
     });
-
   }
 
   const totals = calculateTotal();
 
-  if ($("subtotal")) $("subtotal").textContent = money(totals.subtotal);
-  if ($("tax")) $("tax").textContent = money(totals.tax);
-  if ($("discountValue")) $("discountValue").textContent = money(totals.discount);
-  if ($("total")) $("total").textContent = money(totals.total);
+  if ($("subtotal")) {
+    $("subtotal").textContent = money(totals.subtotal);
+  }
+
+  if ($("tax")) {
+    $("tax").textContent = money(totals.tax);
+  }
+
+  if ($("discountValue")) {
+    $("discountValue").textContent = money(totals.discount);
+  }
+
+  if ($("total")) {
+    $("total").textContent = money(totals.total);
+  }
 
   if ($("saveOrder")) {
     $("saveOrder").disabled = !cart.length || isSavingOrder;
@@ -613,7 +657,6 @@ function renderCart() {
   if ($("savePrint")) {
     $("savePrint").disabled = !cart.length || isSavingOrder;
   }
-
 }
 
 
@@ -629,18 +672,11 @@ $("discountAmount")?.addEventListener("input", renderCart);
 ========================================== */
 
 function generateBillNumber() {
-
   const highest = orders.reduce((max, order) => {
-
-    return Math.max(
-      max,
-      Number(order.billNumber) || 0
-    );
-
+    return Math.max(max, Number(order.billNumber) || 0);
   }, 100);
 
   return String(highest + 1).padStart(4, "0");
-
 }
 
 
@@ -649,7 +685,6 @@ function generateBillNumber() {
 ========================================== */
 
 async function createOrder() {
-
   if (isSavingOrder) return null;
 
   if (!cart.length) {
@@ -668,16 +703,14 @@ async function createOrder() {
   renderCart();
 
   try {
-
     const orderData = {
       billNumber: generateBillNumber(),
 
       items: cart.map(item => ({
-        itemId: item.id,
+        id: item.id,
         name: item.name,
         price: item.price,
-        quantity: item.quantity,
-        subtotal: item.price * item.quantity
+        quantity: item.quantity
       })),
 
       subtotal: totals.subtotal,
@@ -685,11 +718,10 @@ async function createOrder() {
       discount: totals.discount,
       total: totals.total,
 
-      paymentMethod: "Pending",
-      paymentStatus: "Pending",
-      status: "Pending",
+      paymentMethod: "",
+      status: "Unsettled",
 
-      createdAt: getDateTime()
+      date: getDateTime()
     };
 
     const response = await apiFetch("/orders", {
@@ -697,7 +729,12 @@ async function createOrder() {
       body: JSON.stringify(orderData)
     });
 
-    const savedOrder = await readApiResponse(response);
+    const data = await readApiResponse(response);
+    const savedOrder = getSavedOrder(data);
+
+    if (!savedOrder || (!savedOrder._id && !savedOrder.id && !savedOrder.billNumber)) {
+      throw new Error("Order response is incomplete. Please check Billing.");
+    }
 
     cart = [];
 
@@ -711,22 +748,15 @@ async function createOrder() {
 
     showToast("Order saved successfully");
 
-    return savedOrder.order || savedOrder.data || savedOrder;
-
+    return savedOrder;
   } catch (error) {
-
     console.error("Save Order Error:", error);
     showToast(error.message || "Failed to save order");
-
     return null;
-
   } finally {
-
     isSavingOrder = false;
     renderCart();
-
   }
-
 }
 
 
@@ -735,9 +765,7 @@ async function createOrder() {
 ========================================== */
 
 $("saveOrder")?.addEventListener("click", async () => {
-
   await createOrder();
-
 });
 
 
@@ -746,27 +774,35 @@ $("saveOrder")?.addEventListener("click", async () => {
 ========================================== */
 
 $("savePrint")?.addEventListener("click", async () => {
-
   const savedOrder = await createOrder();
 
   if (!savedOrder) return;
 
   currentReceiptOrder = savedOrder;
-
   openReceipt(savedOrder);
-
 });
+
+
 /* ==========================================
    23. DELETE BILL
 ========================================== */
 
 async function deleteBill(id) {
+  const order = orders.find(
+    item => String(getOrderId(item)) === String(id)
+  );
+
+  if (!order) return;
+
+  if (isOrderSettled(order)) {
+    showToast("Settled bills cannot be deleted");
+    return;
+  }
 
   if (!confirm("Delete this unsettled bill?")) return;
 
   try {
-
-    const response = await apiFetch(`/orders/${id}`, {
+    const response = await apiFetch(`/orders/${encodeURIComponent(id)}`, {
       method: "DELETE"
     });
 
@@ -774,17 +810,11 @@ async function deleteBill(id) {
 
     await loadOrders();
 
-    renderBills();
-
     showToast("Bill deleted successfully");
-
   } catch (error) {
-
     console.error("Delete Bill Error:", error);
     showToast(error.message || "Failed to delete bill");
-
   }
-
 }
 
 
@@ -793,12 +823,16 @@ async function deleteBill(id) {
 ========================================== */
 
 function openPayment(id) {
-
   const order = orders.find(
-    item => String(item._id || item.id) === String(id)
+    item => String(getOrderId(item)) === String(id)
   );
 
   if (!order) return;
+
+  if (isOrderSettled(order)) {
+    showToast("This bill is already settled");
+    return;
+  }
 
   selectedPaymentBill = order;
 
@@ -813,12 +847,12 @@ function openPayment(id) {
     $("paymentMethod").value = "Cash";
   }
 
-  if ($("splitFields")) {
-    $("splitFields").classList.add("hidden");
-  }
+  if ($("splitCash")) $("splitCash").value = "";
+  if ($("splitGpay")) $("splitGpay").value = "";
+
+  $("splitFields")?.classList.add("hidden");
 
   openModal("paymentModal");
-
 }
 
 
@@ -827,11 +861,9 @@ function openPayment(id) {
 ========================================== */
 
 $("paymentMethod")?.addEventListener("change", () => {
-
   const split = $("paymentMethod").value === "Split";
 
   $("splitFields")?.classList.toggle("hidden", !split);
-
 });
 
 
@@ -840,27 +872,37 @@ $("paymentMethod")?.addEventListener("change", () => {
 ========================================== */
 
 $("confirmPayment")?.addEventListener("click", async () => {
+  if (!selectedPaymentBill || isConfirmingPayment) return;
 
-  if (!selectedPaymentBill) return;
-
-  const id = selectedPaymentBill._id || selectedPaymentBill.id;
+  const id = getOrderId(selectedPaymentBill);
   const method = $("paymentMethod")?.value;
-
   const total = Number(selectedPaymentBill.total || 0);
 
-  let paymentData = {
+  if (!id || !method || total <= 0) {
+    showToast("Invalid payment details");
+    return;
+  }
+
+  const paymentData = {
     paymentMethod: method,
-    paymentStatus: "Paid",
-    status: "Paid"
+    status: "Settled"
   };
 
   if (method === "Split") {
-
     const cash = Number($("splitCash")?.value || 0);
     const gpay = Number($("splitGpay")?.value || 0);
 
-    if (cash <= 0 || gpay <= 0 || Math.abs(cash + gpay - total) > 0.01) {
+    if (
+      cash < 0 ||
+      gpay < 0 ||
+      Math.abs(cash + gpay - total) > 0.01
+    ) {
       showToast("Split amounts must equal bill total");
+      return;
+    }
+
+    if (cash + gpay <= 0) {
+      showToast("Enter payment amounts");
       return;
     }
 
@@ -868,33 +910,35 @@ $("confirmPayment")?.addEventListener("click", async () => {
     paymentData.gpayAmount = gpay;
   }
 
-  try {
+  isConfirmingPayment = true;
 
-    const response = await apiFetch(`/orders/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(paymentData)
-    });
+  const button = $("confirmPayment");
+  if (button) button.disabled = true;
+
+  try {
+    const response = await apiFetch(
+      `/orders/${encodeURIComponent(id)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(paymentData)
+      }
+    );
 
     await readApiResponse(response);
 
     closeModal("paymentModal");
-
     selectedPaymentBill = null;
 
     await loadOrders();
 
-    renderBills();
-    renderReports();
-
     showToast("Payment completed successfully");
-
   } catch (error) {
-
     console.error("Payment Error:", error);
     showToast(error.message || "Payment failed");
-
+  } finally {
+    isConfirmingPayment = false;
+    if (button) button.disabled = false;
   }
-
 });
 
 
@@ -903,7 +947,6 @@ $("confirmPayment")?.addEventListener("click", async () => {
 ========================================== */
 
 function setReportRange(from, to, label, type = "custom") {
-
   reportRange = {
     type,
     from,
@@ -916,7 +959,6 @@ function setReportRange(from, to, label, type = "custom") {
   }
 
   renderReports();
-
 }
 
 
@@ -925,27 +967,22 @@ function setReportRange(from, to, label, type = "custom") {
 ========================================== */
 
 function applyPresetRange(type) {
-
   const today = new Date();
 
   let from = new Date(today);
-  let to = new Date(today);
+  const to = new Date(today);
   let label = "";
 
   if (type === "today") {
-
     label = "Showing today's report";
-
   } else if (type === "15days") {
-
     from.setDate(today.getDate() - 14);
     label = "Showing last 15 days";
-
   } else if (type === "month") {
-
     from = new Date(today.getFullYear(), today.getMonth(), 1);
     label = "Showing this month";
-
+  } else {
+    return;
   }
 
   if ($("reportFromDate")) {
@@ -966,7 +1003,6 @@ function applyPresetRange(type) {
     label,
     type
   );
-
 }
 
 
@@ -975,11 +1011,9 @@ function applyPresetRange(type) {
 ========================================== */
 
 document.querySelectorAll("[data-range]").forEach(button => {
-
   button.addEventListener("click", () => {
     applyPresetRange(button.dataset.range);
   });
-
 });
 
 
@@ -988,17 +1022,13 @@ document.querySelectorAll("[data-range]").forEach(button => {
 ========================================== */
 
 $("calendarToggle")?.addEventListener("click", () => {
-
   if ($("customDateFields")) {
     $("customDateFields").hidden =
       !$("customDateFields").hidden;
   }
-
 });
 
-
 $("applyReportDates")?.addEventListener("click", () => {
-
   const from = $("reportFromDate")?.value;
   const to = $("reportToDate")?.value;
 
@@ -1022,7 +1052,6 @@ $("applyReportDates")?.addEventListener("click", () => {
   if ($("customDateFields")) {
     $("customDateFields").hidden = true;
   }
-
 });
 
 
@@ -1031,18 +1060,15 @@ $("applyReportDates")?.addEventListener("click", () => {
 ========================================== */
 
 function getReportOrders() {
-
   return orders.filter(order => {
-
     const date = orderLocalDate(order);
 
     return (
+      date &&
       date >= reportRange.from &&
       date <= reportRange.to
     );
-
   });
-
 }
 
 
@@ -1051,19 +1077,10 @@ function getReportOrders() {
 ========================================== */
 
 function buildReportData() {
-
   const filtered = getReportOrders();
 
-  const settled = filtered.filter(order =>
-    order.paymentStatus === "Paid" ||
-    order.paymentStatus === "Settled" ||
-    order.status === "Paid" ||
-    order.status === "Settled"
-  );
-
-  const pending = filtered.filter(order =>
-    !settled.includes(order)
-  );
+  const settled = filtered.filter(isOrderSettled);
+  const pending = filtered.filter(order => !isOrderSettled(order));
 
   const sales = settled.reduce(
     (sum, order) => sum + Number(order.total || 0),
@@ -1071,7 +1088,6 @@ function buildReportData() {
   );
 
   const cash = settled.reduce((sum, order) => {
-
     if (order.paymentMethod === "Cash") {
       return sum + Number(order.total || 0);
     }
@@ -1081,11 +1097,9 @@ function buildReportData() {
     }
 
     return sum;
-
   }, 0);
 
   const gpay = settled.reduce((sum, order) => {
-
     if (order.paymentMethod === "GPay") {
       return sum + Number(order.total || 0);
     }
@@ -1095,8 +1109,11 @@ function buildReportData() {
     }
 
     return sum;
-
   }, 0);
+
+  const splitTotal = settled
+    .filter(order => order.paymentMethod === "Split")
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   return {
     filtered,
@@ -1104,9 +1121,9 @@ function buildReportData() {
     pending,
     sales,
     cash,
-    gpay
+    gpay,
+    splitTotal
   };
-
 }
 
 
@@ -1115,7 +1132,6 @@ function buildReportData() {
 ========================================== */
 
 function renderReports() {
-
   const data = buildReportData();
 
   if ($("reportSales")) {
@@ -1135,7 +1151,6 @@ function renderReports() {
   }
 
   if ($("paymentSummary")) {
-
     $("paymentSummary").innerHTML = `
       <div class="payment-line">
         <span>Cash</span>
@@ -1149,48 +1164,39 @@ function renderReports() {
 
       <div class="payment-line">
         <span>Split Payment</span>
-        <strong>${money(
-          data.settled
-            .filter(order => order.paymentMethod === "Split")
-            .reduce((sum, order) => sum + Number(order.total || 0), 0)
-        )}</strong>
+        <strong>${money(data.splitTotal)}</strong>
       </div>
     `;
-
   }
 
   if ($("reportTransactions")) {
-
     if (!data.filtered.length) {
-
       $("reportTransactions").innerHTML = `
         <div class="empty-message">No transactions available</div>
       `;
-
     } else {
+      const sorted = [...data.filtered].sort(
+        (a, b) => new Date(b.createdAt || b.date) -
+                  new Date(a.createdAt || a.date)
+      );
 
-      $("reportTransactions").innerHTML = data.filtered.map(order => `
+      $("reportTransactions").innerHTML = sorted.map(order => `
+        <div class="bill-row">
 
-        <div class="transaction-row">
-
-          <div>
+          <div class="bill-info">
             <strong>Bill #${escapeHTML(order.billNumber || "")}</strong>
-            <p>${escapeHTML(orderLocalDate(order))}</p>
+            <small>${escapeHTML(orderLocalDate(order))}</small>
           </div>
 
           <div>
-            <strong>${money(order.total)}</strong>
-            <p>${escapeHTML(order.paymentMethod || "Pending")}</p>
+            <strong class="bill-amount">${money(order.total)}</strong>
+            <small>${escapeHTML(order.paymentMethod || "Pending")}</small>
           </div>
 
         </div>
-
       `).join("");
-
     }
-
   }
-
 }
 
 
@@ -1199,12 +1205,10 @@ function renderReports() {
 ========================================== */
 
 $("refreshReports")?.addEventListener("click", async () => {
-
   await loadOrders();
   renderReports();
 
   showToast("Reports refreshed");
-
 });
 
 
@@ -1213,7 +1217,6 @@ $("refreshReports")?.addEventListener("click", async () => {
 ========================================== */
 
 $("printReport")?.addEventListener("click", () => {
-
   const data = buildReportData();
 
   const rows = data.filtered.map(order => `
@@ -1238,15 +1241,30 @@ $("printReport")?.addEventListener("click", () => {
     <head>
       <title>IYYAANS CAFE Report</title>
       <style>
-        body { font-family: Arial, sans-serif; padding: 25px; }
+        body {
+          font-family: Arial, sans-serif;
+          padding: 25px;
+          color: #174B35;
+        }
+
         h2, p { text-align: center; }
+
         .summary { margin: 20px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ccc; padding: 9px; text-align: left; }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        th, td {
+          border: 1px solid #ccc;
+          padding: 9px;
+          text-align: left;
+        }
       </style>
     </head>
     <body>
-      <h2>IYYAANS CAFE</h2>
+      <h2>${escapeHTML(settings.cafeName)}</h2>
       <p>${escapeHTML(reportRange.label)}</p>
 
       <div class="summary">
@@ -1276,7 +1294,6 @@ $("printReport")?.addEventListener("click", () => {
   `);
 
   printWindow.document.close();
-
 });
 
 
@@ -1285,33 +1302,28 @@ $("printReport")?.addEventListener("click", () => {
 ========================================== */
 
 function saveData() {
-
   localStorage.setItem(
     "iyyaans_settings",
     JSON.stringify(settings)
   );
-
 }
 
 function loadSettings() {
-
   if ($("cafeName")) {
-    $("cafeName").value = settings.cafeName || "IYYAANS CAFE";
+    $("cafeName").value = settings.cafeName;
   }
 
   if ($("receiptFooter")) {
-    $("receiptFooter").value =
-      settings.receiptFooter || "Thank you! Visit Again";
+    $("receiptFooter").value = settings.receiptFooter;
   }
 
   if ($("printerType")) {
-    $("printerType").value = settings.printerType || "System";
+    $("printerType").value = settings.printerType;
   }
 
   if ($("paperSize")) {
-    $("paperSize").value = settings.paperSize || "80mm";
+    $("paperSize").value = settings.paperSize;
   }
-
 }
 
 
@@ -1320,7 +1332,6 @@ function loadSettings() {
 ========================================== */
 
 $("saveSettings")?.addEventListener("click", () => {
-
   settings.cafeName =
     $("cafeName")?.value.trim() || "IYYAANS CAFE";
 
@@ -1330,7 +1341,6 @@ $("saveSettings")?.addEventListener("click", () => {
   saveData();
 
   showToast("Settings saved");
-
 });
 
 
@@ -1339,14 +1349,12 @@ $("saveSettings")?.addEventListener("click", () => {
 ========================================== */
 
 $("savePrinter")?.addEventListener("click", () => {
-
   settings.printerType = $("printerType")?.value || "System";
   settings.paperSize = $("paperSize")?.value || "80mm";
 
   saveData();
 
   showToast("Printer settings saved");
-
 });
 
 
@@ -1355,70 +1363,68 @@ $("savePrinter")?.addEventListener("click", () => {
 ========================================== */
 
 function openReceipt(order) {
-
   currentReceiptOrder = order;
 
   const cafeName = settings.cafeName || "IYYAANS CAFE";
-
   const footer = settings.receiptFooter || "Thank you! Visit Again";
 
   if ($("receiptDetails")) {
-
     const items = order.items || [];
 
     $("receiptDetails").innerHTML = `
-
       <div class="receipt-center">
         <h2>${escapeHTML(cafeName)}</h2>
         <p>Bill: ${escapeHTML(order.billNumber || "")}</p>
+        <p>${escapeHTML(orderLocalDate(order))}</p>
       </div>
 
-      <hr>
+      <div class="receipt-line"></div>
 
       ${items.map(item => `
-        <div class="receipt-line">
+        <div class="receipt-item">
           <span>
             ${escapeHTML(item.name)}
             × ${Number(item.quantity || 1)}
           </span>
-          <strong>${money(
-            Number(item.price || 0) * Number(item.quantity || 1)
-          )}</strong>
+
+          <strong>
+            ${money(
+              Number(item.price || 0) *
+              Number(item.quantity || 1)
+            )}
+          </strong>
         </div>
       `).join("")}
 
-      <hr>
+      <div class="receipt-line"></div>
 
-      <div class="receipt-line">
+      <div class="receipt-item">
         <span>Subtotal</span>
         <strong>${money(order.subtotal)}</strong>
       </div>
 
-      <div class="receipt-line">
+      <div class="receipt-item">
         <span>Tax</span>
         <strong>${money(order.tax)}</strong>
       </div>
 
-      <div class="receipt-line">
+      <div class="receipt-item">
         <span>Discount</span>
         <strong>${money(order.discount)}</strong>
       </div>
 
-      <div class="receipt-line">
+      <div class="receipt-item">
         <strong>Total</strong>
         <strong>${money(order.total)}</strong>
       </div>
 
-      <hr>
+      <div class="receipt-line"></div>
 
       <p class="receipt-center">${escapeHTML(footer)}</p>
-
     `;
-
   }
 
   openModal("receiptModal");
-
 }
 
 
@@ -1427,11 +1433,9 @@ function openReceipt(order) {
 ========================================== */
 
 $("printReceipt")?.addEventListener("click", () => {
-
   if (!currentReceiptOrder) return;
 
   const content = $("receiptContent");
-
   if (!content) return;
 
   const printWindow = window.open("", "_blank");
@@ -1447,28 +1451,42 @@ $("printReceipt")?.addEventListener("click", () => {
     <head>
       <title>IYYAANS CAFE Receipt</title>
       <style>
+        * { box-sizing: border-box; }
+
         body {
           font-family: Arial, sans-serif;
           width: ${settings.paperSize === "58mm" ? "58mm" : "80mm"};
           margin: 0 auto;
           padding: 8px;
           font-size: 12px;
+          color: #000;
         }
+
         .receipt-center { text-align: center; }
-        .receipt-line {
+
+        .receipt-item {
           display: flex;
           justify-content: space-between;
           gap: 8px;
           margin: 7px 0;
         }
-        hr { border: 0; border-top: 1px dashed #000; }
+
+        .receipt-line {
+          border-top: 1px dashed #000;
+          margin: 12px 0;
+        }
+
         @media print {
-          body { width: auto; }
+          body {
+            width: ${settings.paperSize === "58mm" ? "58mm" : "80mm"};
+            margin: 0;
+          }
         }
       </style>
     </head>
     <body>
       ${content.innerHTML}
+
       <script>
         window.onload = () => window.print();
       <\/script>
@@ -1477,7 +1495,6 @@ $("printReceipt")?.addEventListener("click", () => {
   `);
 
   printWindow.document.close();
-
 });
 
 
@@ -1486,15 +1503,12 @@ $("printReceipt")?.addEventListener("click", () => {
 ========================================== */
 
 if ($("dateText")) {
-
-  $("dateText").textContent =
-    new Date().toLocaleDateString("en-IN", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
-
+  $("dateText").textContent = new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
 }
 
 
@@ -1503,11 +1517,16 @@ if ($("dateText")) {
 ========================================== */
 
 async function loadMenuItems() {
+  const grid = $("menuGrid");
+
+  if (grid && !menuItems.length) {
+    grid.innerHTML = `
+      <div class="no-items">Loading menu items...</div>
+    `;
+  }
 
   try {
-
     const response = await apiFetch("/items");
-
     const data = await readApiResponse(response);
 
     menuItems = normalizeList(data, "items");
@@ -1515,13 +1534,22 @@ async function loadMenuItems() {
     renderCategories();
     renderMenu();
 
+    if (!menuItems.length) {
+      console.info("No menu items found in API response.");
+    }
   } catch (error) {
-
     console.error("Load Menu Error:", error);
+
+    if (grid) {
+      grid.innerHTML = `
+        <div class="no-items">
+          Unable to load menu items. Please refresh.
+        </div>
+      `;
+    }
+
     showToast(error.message || "Failed to load menu");
-
   }
-
 }
 
 
@@ -1530,11 +1558,8 @@ async function loadMenuItems() {
 ========================================== */
 
 async function loadOrders() {
-
   try {
-
     const response = await apiFetch("/orders");
-
     const data = await readApiResponse(response);
 
     orders = normalizeList(data, "orders");
@@ -1542,88 +1567,97 @@ async function loadOrders() {
     renderBills();
     renderReports();
 
+    return true;
   } catch (error) {
-
     console.error("Load Orders Error:", error);
     showToast(error.message || "Failed to load orders");
-
+    return false;
   }
-
 }
-
 
 /* ==========================================
    44. RENDER BILLS
+   BILLING PAGE = PENDING ONLY
 ========================================== */
 
 function renderBills() {
-
   const container = $("billList");
-
   if (!container) return;
 
   const search = $("searchBills")?.value.toLowerCase().trim() || "";
 
-  const filtered = orders.filter(order =>
+  // Separate settled and pending bills
+  const settled = orders.filter(isOrderSettled);
+  const pending = orders.filter(order => !isOrderSettled(order));
+
+  // Billing page shows ONLY pending bills
+  const filtered = pending.filter(order =>
     String(order.billNumber || "").toLowerCase().includes(search)
   );
 
-  const settled = orders.filter(order =>
-    order.paymentStatus === "Paid" ||
-    order.paymentStatus === "Settled" ||
-    order.status === "Paid" ||
-    order.status === "Settled"
-  );
-
-  const pending = orders.filter(order => !settled.includes(order));
-
-  if ($("billCount")) $("billCount").textContent = orders.length;
-  if ($("unsettledCount")) $("unsettledCount").textContent = pending.length;
-  if ($("settledCount")) $("settledCount").textContent = settled.length;
-
-  if (!filtered.length) {
-
-    container.innerHTML = `
-      <div class="empty-message">No bills available</div>
-    `;
-
-    return;
-
+  if ($("billCount")) {
+    $("billCount").textContent = pending.length;
   }
 
-  container.innerHTML = filtered.map(order => {
+  if ($("unsettledCount")) {
+    $("unsettledCount").textContent = pending.length;
+  }
 
-    const id = order._id || order.id;
-    const isSettled = settled.includes(order);
+  if ($("settledCount")) {
+    $("settledCount").textContent = settled.length;
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = `
+      <div class="empty-message">
+        No pending bills available
+      </div>
+    `;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    return new Date(b.createdAt || b.date || 0) -
+           new Date(a.createdAt || a.date || 0);
+  });
+
+  container.innerHTML = sorted.map(order => {
+    const id = getOrderId(order);
 
     return `
-      <div class="bill-card">
+      <div class="bill-row">
 
         <div class="bill-info">
-          <h3>Bill #${escapeHTML(order.billNumber || "")}</h3>
-          <p>${escapeHTML(orderLocalDate(order))}</p>
-          <strong>${money(order.total)}</strong>
-          <span>${isSettled ? "Settled" : "Pending"}</span>
+          <strong>Bill #${escapeHTML(order.billNumber || "")}</strong>
+          <small>${escapeHTML(orderLocalDate(order))}</small>
+          <small class="status">Pending</small>
+        </div>
+
+        <div>
+          <strong class="bill-amount">
+            ${money(order.total)}
+          </strong>
         </div>
 
         <div class="bill-actions">
 
-          ${!isSettled ? `
-            <button
-              type="button"
-              data-pay-bill="${escapeHTML(id)}">
-              Settle
-            </button>
-
-            <button
-              type="button"
-              data-delete-bill="${escapeHTML(id)}">
-              Delete
-            </button>
-          ` : ""}
+          <button
+            type="button"
+            class="small-action"
+            data-pay-bill="${escapeHTML(id)}">
+            Settle
+          </button>
 
           <button
             type="button"
+            class="small-action"
+            data-delete-bill="${escapeHTML(id)}">
+            Delete
+          </button>
+
+          <button
+            type="button"
+            class="small-action"
             data-print-bill="${escapeHTML(id)}">
             Receipt
           </button>
@@ -1632,39 +1666,29 @@ function renderBills() {
 
       </div>
     `;
-
   }).join("");
 
   container.querySelectorAll("[data-pay-bill]").forEach(button => {
-
     button.addEventListener("click", () => {
       openPayment(button.dataset.payBill);
     });
-
   });
 
   container.querySelectorAll("[data-delete-bill]").forEach(button => {
-
     button.addEventListener("click", () => {
       deleteBill(button.dataset.deleteBill);
     });
-
   });
 
   container.querySelectorAll("[data-print-bill]").forEach(button => {
-
     button.addEventListener("click", () => {
-
       const order = orders.find(item =>
-        String(item._id || item.id) === String(button.dataset.printBill)
+        String(getOrderId(item)) === String(button.dataset.printBill)
       );
 
       if (order) openReceipt(order);
-
     });
-
   });
-
 }
 
 
@@ -1680,7 +1704,6 @@ $("searchBills")?.addEventListener("input", renderBills);
 ========================================== */
 
 window.addEventListener("beforeinstallprompt", event => {
-
   event.preventDefault();
 
   deferredInstallPrompt = event;
@@ -1688,12 +1711,9 @@ window.addEventListener("beforeinstallprompt", event => {
   if ($("installAppBtn")) {
     $("installAppBtn").hidden = false;
   }
-
 });
 
-
 $("installAppBtn")?.addEventListener("click", async () => {
-
   if (!deferredInstallPrompt) {
     showToast("Install option is not available");
     return;
@@ -1709,13 +1729,12 @@ $("installAppBtn")?.addEventListener("click", async () => {
 
   deferredInstallPrompt = null;
 
-  $("installAppBtn").hidden = true;
-
+  if ($("installAppBtn")) {
+    $("installAppBtn").hidden = true;
+  }
 });
 
-
 window.addEventListener("appinstalled", () => {
-
   deferredInstallPrompt = null;
 
   if ($("installAppBtn")) {
@@ -1723,7 +1742,6 @@ window.addEventListener("appinstalled", () => {
   }
 
   showToast("IYYAANS CAFE installed");
-
 });
 
 
@@ -1732,16 +1750,18 @@ window.addEventListener("appinstalled", () => {
 ========================================== */
 
 async function initializeApp() {
+  if (!localStorage.getItem("adminToken")) {
+    window.location.replace("login.html");
+    return;
+  }
 
   loadSettings();
-
   renderCart();
 
   applyPresetRange("today");
 
   await loadMenuItems();
-
   await loadOrders();
-
 }
+
 initializeApp();

@@ -1,8 +1,11 @@
+
 :root {
   --green: #174B35;
   --green-dark: #103B2A;
+  --green-light: #286B4B;
   --sandal: #E8D9BD;
   --white: #FFFFFF;
+  --bg: #F7F5EF;
   --border: #E5E0D5;
   --muted: #777F79;
   --shadow: 0 8px 28px rgba(16, 59, 42, 0.10);
@@ -16,18 +19,21 @@
 
 html {
   min-height: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
   font-family: "DM Sans", Arial, sans-serif;
-  background: var(--sandal);
+  background: var(--bg);
   color: var(--green);
+  overflow-x: hidden;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -35,12 +41,14 @@ button {
   cursor: pointer;
 }
 
-/* APP LAYOUT */
+/* APP */
 
 .app {
   min-height: 100vh;
   display: flex;
 }
+
+/* DESKTOP SIDEBAR */
 
 .sidebar {
   width: 245px;
@@ -157,7 +165,7 @@ button {
   margin-top: 4px;
 }
 
-/* MAIN AREA */
+/* MAIN */
 
 .main {
   margin-left: 245px;
@@ -214,12 +222,29 @@ button {
   font-size: 23px;
 }
 
+.logout-btn {
+  margin-left: 12px;
+  padding: 9px 16px;
+  background: var(--green-dark);
+  color: white;
+  border: 1px solid var(--green-dark);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.logout-btn:hover {
+  background: #09291D;
+}
+
 .page-content {
   width: 100%;
   max-width: 1600px;
   margin: auto;
   padding: 28px;
 }
+
+/* PAGE NAVIGATION */
 
 .page {
   display: none;
@@ -229,7 +254,7 @@ button {
   display: block;
 }
 
-/* HEADINGS AND BUTTONS */
+/* HEADINGS */
 
 .section-heading {
   display: flex;
@@ -256,6 +281,8 @@ button {
   gap: 10px;
   flex-shrink: 0;
 }
+
+/* BUTTONS */
 
 .add-button,
 .save-button,
@@ -323,7 +350,8 @@ button {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--green);
   outline: 1px solid var(--green);
 }
@@ -334,6 +362,7 @@ select:focus {
   overflow-x: auto;
   margin-top: 14px;
   padding-bottom: 3px;
+  scrollbar-width: thin;
 }
 
 .category-btn {
@@ -455,7 +484,7 @@ select:focus {
   font-size: 13px;
 }
 
-/* CART POPUP - HIDDEN UNTIL CLICK */
+/* CART */
 
 .cart-panel {
   display: none !important;
@@ -478,14 +507,6 @@ select:focus {
 
 .cart-panel.cart-open {
   display: block !important;
-}
-
-.cart-panel.cart-open::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: white;
 }
 
 .cart-heading {
@@ -602,7 +623,7 @@ select:focus {
   white-space: nowrap;
 }
 
-/* CART TOTAL AND DISCOUNT */
+/* CART SUMMARY */
 
 .cart-summary {
   margin-top: 17px;
@@ -658,7 +679,7 @@ select:focus {
   margin-top: 9px;
 }
 
-/* BILLING AND REPORTS */
+/* BILLING */
 
 .billing-stats,
 .report-grid {
@@ -790,6 +811,8 @@ select:focus {
   font-size: 12px;
 }
 
+/* REPORTS */
+
 .payment-summary {
   display: grid;
   gap: 13px;
@@ -798,6 +821,63 @@ select:focus {
 .payment-line {
   display: flex;
   justify-content: space-between;
+  font-size: 13px;
+}
+
+.report-filter-box {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.report-range-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 15px 0;
+}
+
+.report-range-buttons button {
+  padding: 9px 14px;
+  border: 1px solid var(--green);
+  border-radius: 25px;
+  background: white;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.report-range-buttons button.active {
+  background: var(--green);
+  color: white;
+}
+
+.date-filter-fields {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.date-filter-fields input {
+  min-width: 140px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.report-filter-box button {
+  cursor: pointer;
+}
+
+.report-empty {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -960,43 +1040,137 @@ select:focus {
   }
 }
 
-/* MOBILE */
+/* MOBILE BOTTOM NAVIGATION */
 
 @media (max-width: 700px) {
-  .sidebar {
-    left: -260px;
-    transition: left .25s ease;
+
+  body {
+    padding-bottom: 82px;
   }
 
-  .sidebar.open {
+  .sidebar {
+    position: fixed;
+    top: auto;
     left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 72px;
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+    z-index: 120;
+    background: #FFFFFF;
+    color: var(--green);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -5px 20px rgba(16, 59, 42, .10);
+    overflow: visible;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
   }
+
+  /* Hide desktop branding */
+
+  .brand,
+  .nav-label,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  /* Four bottom navigation icons */
+
+  .sidebar nav {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: center;
+    justify-content: space-around;
+    gap: 4px;
+  }
+
+  .nav-item {
+    min-width: 0;
+    height: 58px;
+    padding: 5px 2px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #8A948D;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    text-align: center;
+    font-size: 23px;
+    line-height: 1;
+    transition: .2s ease;
+  }
+
+  .nav-item span {
+    display: block;
+    margin: 0;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .nav-item.active {
+    background: #EAF2EC;
+    color: var(--green);
+  }
+
+  .nav-item:hover {
+    background: #EAF2EC;
+    color: var(--green);
+  }
+
+  /* Main content */
 
   .main {
     width: 100%;
     margin-left: 0;
+    padding-bottom: 10px;
   }
 
   .topbar {
-    min-height: 67px;
-    padding: 12px 15px;
+    min-height: 65px;
+    padding: 10px 14px;
   }
 
   .topbar h2 {
     font-size: 17px;
   }
 
+  .topbar p {
+    font-size: 10px;
+  }
+
   .menu-toggle {
-    display: block;
+    display: none !important;
+  }
+
+  .top-status {
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .logout-btn {
+    margin-left: 5px;
+    padding: 8px 10px;
+    font-size: 11px;
   }
 
   .page-content {
-    padding: 18px 13px 30px;
+    padding: 17px 12px 25px;
   }
+
+  /* Order heading */
 
   .section-heading {
     align-items: center;
     gap: 8px;
+    margin-bottom: 18px;
   }
 
   .section-heading h1 {
@@ -1013,14 +1187,16 @@ select:focus {
   }
 
   .add-button {
-    padding: 11px 12px;
-    font-size: 11px;
+    padding: 10px 11px;
+    font-size: 10px;
   }
 
   .cart-toggle-btn {
-    padding: 10px 11px;
-    font-size: 11px;
+    padding: 10px;
+    font-size: 10px;
   }
+
+  /* Search */
 
   .menu-toolbar {
     padding: 12px;
@@ -1031,6 +1207,17 @@ select:focus {
     padding: 12px;
     font-size: 12px;
   }
+
+  .category-list {
+    gap: 7px;
+  }
+
+  .category-btn {
+    padding: 8px 13px;
+    font-size: 10px;
+  }
+
+  /* Menu cards */
 
   .menu-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1056,9 +1243,10 @@ select:focus {
 
   .add-cart-btn {
     padding: 8px 10px;
+    font-size: 10px;
   }
 
-  /* MOBILE CART FULL SCREEN */
+  /* Cart full screen */
 
   .cart-panel {
     width: 100% !important;
@@ -1078,38 +1266,27 @@ select:focus {
     max-height: calc(100dvh - 390px);
   }
 
+  /* Billing */
+
   .billing-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: 7px;
   }
 
   .mini-stat {
-    padding: 12px 9px;
+    padding: 12px 8px;
   }
 
   .mini-stat span {
-    font-size: 10px;
+    font-size: 9px;
   }
 
   .mini-stat strong {
-    font-size: 17px;
-  }
-
-  .report-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .report-card {
-    padding: 14px;
-  }
-
-  .report-card strong {
-    font-size: 19px;
+    font-size: 16px;
   }
 
   .content-box {
-    padding: 15px;
+    padding: 14px;
   }
 
   .box-heading {
@@ -1123,23 +1300,74 @@ select:focus {
 
   .bill-row {
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .bill-actions {
-    flex-direction: column;
-    align-items: flex-end;
+    width: 100%;
+    justify-content: flex-start;
+    flex-direction: row;
+    align-items: center;
   }
+
+  /* Reports */
+
+  .report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .report-card {
+    padding: 13px;
+  }
+
+  .report-card strong {
+    font-size: 18px;
+  }
+
+  .report-filter-box {
+    padding: 14px;
+  }
+
+  .report-range-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-range-buttons button {
+    padding: 10px 5px;
+    font-size: 10px;
+  }
+
+  .date-filter-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .date-filter-fields input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Modals */
 
   .modal {
     padding: 18px;
+  }
+
+  /* Toast above bottom navigation */
+
+  .toast {
+    bottom: 90px;
   }
 }
 
 /* SMALL PHONES */
 
 @media (max-width: 380px) {
+
   .page-content {
-    padding: 14px 10px 25px;
+    padding: 14px 10px 22px;
   }
 
   .section-heading h1 {
@@ -1151,8 +1379,8 @@ select:focus {
   }
 
   .add-button {
-    padding: 10px;
-    font-size: 10px;
+    padding: 9px;
+    font-size: 9px;
   }
 
   .cart-toggle-btn {
@@ -1168,13 +1396,18 @@ select:focus {
   }
 
   .mini-stat strong {
-    font-size: 15px;
+    font-size: 14px;
+  }
+
+  .nav-item span {
+    font-size: 9px;
   }
 }
 
 /* PRINT RECEIPT */
 
 @media print {
+
   @page {
     size: 80mm auto;
     margin: 0;
@@ -1208,178 +1441,53 @@ select:focus {
     color: #000000 !important;
     box-sizing: border-box;
   }
-}
-/* LOGOUT BUTTON */
 
-.logout-btn {
-  margin-left: 12px;
-  padding: 9px 16px;
-  background: #174b35;
-  color: #ffffff;
-  border: 1px solid #174b35;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.2s ease;
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
 }
 
-.logout-btn:hover {
-  background: #103b2a;
-  border-color: #103b2a;
-}
+/* REPORT PRINT BUTTON - BESIDE REFRESH */
 
-.logout-btn:active {
-  transform: scale(0.97);
-}
-/* REPORT DATE FILTER */
-
-.report-filter {
-  background: #ffffff;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  box-shadow: var(--shadow);
-}
-
-.report-filter-top {
+#reportsPage > .section-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 15px;
 }
 
-.report-filter-top h3 {
-  font-size: 15px;
-}
-
-.report-range-label {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.report-filter-controls {
+#reportsPage > .section-heading > div:last-child {
   display: flex;
-  align-items: end;
+  align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-.report-filter-controls label {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 7px;
+#reportsPage > .report-filter-box {
+  position: relative;
+  padding-top: 20px;
+  padding-bottom: 20px;
 }
 
-.report-filter-controls input {
-  min-width: 150px;
-  padding: 11px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--green);
-  background: white;
+#reportsPage > .report-filter-box > #printReport {
+  position: absolute;
+  top: -68px;
+  right: 125px;
+  margin: 0;
+  white-space: nowrap;
 }
 
-.report-filter-controls button {
-  border: 0;
-  background: var(--green);
-  color: white;
-  padding: 12px 17px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
+#reportsPage > .report-filter-box > #customDateFields {
+  margin-top: 15px;
 }
-
-.report-filter-controls button:hover {
-  background: var(--green-dark);
-}
-
-.report-presets {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 15px;
-}
-
-.report-presets button {
-  padding: 9px 14px;
-  border: 1px solid var(--green);
-  border-radius: 25px;
-  background: white;
-  color: var(--green);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.report-presets button.active {
-  background: var(--green);
-  color: white;
-}
-
-.report-print-btn {
-  background: var(--sandal) !important;
-  color: var(--green) !important;
-}
-
-.report-empty {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-#customDateFields {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-#customDateFields.hidden {
-  display: none !important;
-}
-
-/* REPORT MOBILE */
 
 @media (max-width: 700px) {
-  .report-filter {
-    padding: 15px;
+  #reportsPage > .report-filter-box > #printReport {
+    position: static;
+    margin-top: 15px;
   }
 
-  .report-filter-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    width: 100%;
-  }
-
-  .report-filter-controls > div {
-    min-width: 0;
-  }
-
-  .report-filter-controls input {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .report-filter-controls button {
-    width: 100%;
-  }
-
-  #customDateFields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .report-filter-top {
-    align-items: flex-start;
-  }
-
-  .report-presets button {
-    flex: 1;
-    white-space: nowrap;
+  #reportsPage > .section-heading {
+    gap: 10px;
   }
 }
